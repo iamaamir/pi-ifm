@@ -24,6 +24,7 @@
   },
   "files": [
     "src",
+    "test",
     "README.md",
     "LICENSE"
   ],
