@@ -299,6 +299,7 @@ export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
 			const items = [
 				{ value: "status", label: "status", description: "Show provider status" },
 				{ value: "refresh", label: "refresh", description: "Refresh the model catalog" },
+				{ value: "config", label: "config", description: "Configure IFM settings" },
 			];
 			const trimmed = prefix.trim();
 			return items.filter((item) => item.value.startsWith(trimmed));
@@ -327,22 +328,28 @@ export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
 					`Base URL: ${current}`,
 					"Set base URL",
 					"Reset base URL",
+					"Show current config",
 				]);
 				if (choice === "Set base URL" && typeof ctx.ui.input === "function") {
 					const value = await ctx.ui.input("Base URL", current);
-					if (typeof value === "string" && value.trim().length > 0) {
-						try {
-							const url = new URL(value.trim());
-							if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("bad protocol");
-							writeIfmConfig({ baseUrl: value.trim() });
-							ctx.ui.notify("Saved. Restart Pi to apply the new base URL.", "info");
-						} catch {
-							ctx.ui.notify("Invalid URL. No changes made.", "error");
-						}
+					const next = typeof value === "string" ? value.trim() : "";
+					if (next.length === 0) {
+						ctx.ui.notify("No value entered. Kept the current base URL.", "info");
+						return;
+					}
+					try {
+						const url = new URL(next);
+						if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("bad protocol");
+						writeIfmConfig({ baseUrl: next });
+						ctx.ui.notify("Saved. Restart Pi to apply the new base URL.", "info");
+					} catch {
+						ctx.ui.notify("Invalid URL. Kept the current base URL.", "error");
 					}
 				} else if (choice === "Reset base URL") {
 					writeIfmConfig({});
 					ctx.ui.notify("Reset. Restart Pi to apply the default base URL.", "info");
+				} else if (choice === "Show current config") {
+					ctx.ui.notify(`Base URL: ${current}`, "info");
 				}
 				return;
 			}
