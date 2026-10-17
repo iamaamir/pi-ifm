@@ -5,7 +5,13 @@
 ## Install
 
 ```bash
-pi install npm:pi-ifm
+pi install git:github.com/iamaamir/pi-ifm
+```
+
+Try it without installing:
+
+```bash
+pi -e git:github.com/iamaamir/pi-ifm
 ```
 
 ## Authenticate
