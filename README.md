@@ -50,6 +50,7 @@ Select a model and start working. Model discovery runs at startup, after login, 
 |---|---|
 | `/ifm status` | Show credential readiness, catalog freshness, model count, compatibility state, and discovery errors. |
 | `/ifm refresh` | Force a live catalog refresh. Keeps the last catalog if the request fails. |
+| `/ifm config` | Configure the IFM base URL interactively. Restart Pi after changing it. |
 
 ## Model discovery
 

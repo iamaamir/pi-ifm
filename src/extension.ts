@@ -15,6 +15,9 @@ import {
 import { createIfmDiscovery } from "./discovery.ts";
 import { normalizeIfmRequestPayload } from "./normalize.ts";
 import { createIfmProvider } from "./provider.ts";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { homedir } from "node:os";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
@@ -188,9 +191,29 @@ export function makeIfmCleaner() {
 	});
 }
 
+function ifmConfigPath(): string {
+	const base = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
+	return join(base, "ifm.json");
+}
+
+function readIfmConfig(): { baseUrl?: string } {
+	try {
+		return JSON.parse(readFileSync(ifmConfigPath(), "utf8")) as { baseUrl?: string };
+	} catch {
+		return {};
+	}
+}
+
+function writeIfmConfig(config: { baseUrl?: string }): void {
+	const file = ifmConfigPath();
+	mkdirSync(dirname(file), { recursive: true });
+	writeFileSync(file, JSON.stringify(config, null, 2) + "\n", "utf8");
+}
+
 export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
 	const discovery = createIfmDiscovery();
-	const baseUrl = process.env.IFM_BASE_URL ?? IFM_DEFAULT_BASE_URL;
+	const config = readIfmConfig();
+	const baseUrl = process.env.IFM_BASE_URL ?? config.baseUrl ?? IFM_DEFAULT_BASE_URL;
 	const provider = createIfmProvider({ discovery, baseUrl });
 
 	// Warm the catalog at startup, bounded so startup never hangs.
@@ -291,6 +314,36 @@ export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
 					return;
 				}
 				ctx.ui.notify(`IFM catalog refreshed: ${ifmModelCount(ctx)} chat model(s).`, "info");
+				return;
+			}
+
+			if (subcommand === "config") {
+				const current = process.env.IFM_BASE_URL ?? readIfmConfig().baseUrl ?? IFM_DEFAULT_BASE_URL;
+				if (typeof ctx.ui?.select !== "function") {
+					ctx.ui.notify(`Base URL: ${current}`, "info");
+					return;
+				}
+				const choice = await ctx.ui.select("IFM configuration", [
+					`Base URL: ${current}`,
+					"Set base URL",
+					"Reset base URL",
+				]);
+				if (choice === "Set base URL" && typeof ctx.ui.input === "function") {
+					const value = await ctx.ui.input("Base URL", current);
+					if (typeof value === "string" && value.trim().length > 0) {
+						try {
+							const url = new URL(value.trim());
+							if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("bad protocol");
+							writeIfmConfig({ baseUrl: value.trim() });
+							ctx.ui.notify("Saved. Restart Pi to apply the new base URL.", "info");
+						} catch {
+							ctx.ui.notify("Invalid URL. No changes made.", "error");
+						}
+					}
+				} else if (choice === "Reset base URL") {
+					writeIfmConfig({});
+					ctx.ui.notify("Reset. Restart Pi to apply the default base URL.", "info");
+				}
 				return;
 			}
 
