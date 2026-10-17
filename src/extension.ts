@@ -271,6 +271,14 @@ export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
 
 	pi.registerCommand("ifm", {
 		description: "IFM provider status and model catalog refresh",
+		getArgumentCompletions: (prefix) => {
+			const items = [
+				{ value: "status", label: "status", description: "Show provider status" },
+				{ value: "refresh", label: "refresh", description: "Refresh the model catalog" },
+			];
+			const trimmed = prefix.trim();
+			return items.filter((item) => item.value.startsWith(trimmed));
+		},
 		handler: async (args, ctx) => {
 			const subcommand = args.trim().split(/\s+/)[0] ?? "status";
 
