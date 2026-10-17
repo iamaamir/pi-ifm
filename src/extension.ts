@@ -341,13 +341,13 @@ export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
 						const url = new URL(next);
 						if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("bad protocol");
 						writeIfmConfig({ baseUrl: next });
-						ctx.ui.notify("Saved. Restart Pi to apply the new base URL.", "info");
+						ctx.ui.notify("Saved. Reload or restart Pi to apply the new base URL.", "info");
 					} catch {
 						ctx.ui.notify("Invalid URL. Kept the current base URL.", "error");
 					}
 				} else if (choice === "Reset base URL") {
 					writeIfmConfig({});
-					ctx.ui.notify("Reset. Restart Pi to apply the default base URL.", "info");
+					ctx.ui.notify("Reset. Reload or restart Pi to apply the default base URL.", "info");
 				} else if (choice === "Show current config") {
 					ctx.ui.notify(`Base URL: ${current}`, "info");
 				}
