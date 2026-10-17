@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { IFM_DEFAULT_BASE_URL, IFM_PROVIDER_ID } from "../src/constants.ts";
 import type { IfmChatModelDescriptor, IfmDiscovery } from "../src/discovery.ts";
 import { createIfmProvider, toIfmModel } from "../src/provider.ts";
-import { IFM_DEFAULT_BASE_URL, IFM_PROVIDER_ID } from "../src/constants.ts";
 
 const descriptor: IfmChatModelDescriptor = {
 	id: "IFM/K2-Horizon-375B-A23B",
@@ -44,7 +44,7 @@ describe("createIfmProvider", () => {
 		const apiKey = provider.auth.apiKey!;
 		expect(typeof apiKey.login).toBe("function");
 		let promptType = "";
-		const credential = await apiKey.login!({
+		const credential = await apiKey.login?.({
 			signal: new AbortController().signal,
 			prompt: async (prompt) => {
 				promptType = prompt.type;
@@ -58,7 +58,7 @@ describe("createIfmProvider", () => {
 
 	test("resolves the key from the environment", async () => {
 		const provider = createIfmProvider({ discovery: fakeDiscovery([]) });
-		const result = await provider.auth.apiKey!.resolve({
+		const result = await provider.auth.apiKey?.resolve({
 			ctx: { env: async (name) => (name === "IFM_API_KEY" ? "env-key" : undefined), fileExists: async () => false },
 			signal: new AbortController().signal,
 		});
@@ -68,7 +68,7 @@ describe("createIfmProvider", () => {
 
 	test("resolves the token from the environment", async () => {
 		const provider = createIfmProvider({ discovery: fakeDiscovery([]) });
-		const result = await provider.auth.apiKey!.resolve({
+		const result = await provider.auth.apiKey?.resolve({
 			ctx: { env: async (name) => (name === "IFM_API_TOKEN" ? "token-key" : undefined), fileExists: async () => false },
 			signal: new AbortController().signal,
 		});
@@ -79,7 +79,7 @@ describe("createIfmProvider", () => {
 	test("publishes discovered models", async () => {
 		const provider = createIfmProvider({ discovery: fakeDiscovery([descriptor]) });
 		const publishCalls: unknown[] = [];
-		await provider.refreshModels!({
+		await provider.refreshModels?.({
 			credential: { type: "api_key", key: "test-key" },
 			allowNetwork: true,
 			signal: new AbortController().signal,
@@ -97,7 +97,7 @@ describe("createIfmProvider", () => {
 	test("keeps restored models when the credential is absent", async () => {
 		const provider = createIfmProvider({ discovery: fakeDiscovery([descriptor]) });
 		let updateCalled = false;
-		await provider.refreshModels!({
+		await provider.refreshModels?.({
 			credential: undefined,
 			allowNetwork: true,
 			signal: new AbortController().signal,

@@ -10,8 +10,8 @@
 import {
 	createProvider,
 	envApiKeyAuth,
-	openAICompletionsApi,
 	type Model,
+	openAICompletionsApi,
 	type Provider,
 } from "@earendil-works/pi-ai/compat";
 import {
@@ -21,12 +21,7 @@ import {
 	IFM_PROVIDER_ID,
 	IFM_PROVIDER_NAME,
 } from "./constants.ts";
-import { IFM_COMPAT } from "./discovery.ts";
-import {
-	createIfmDiscovery,
-	type IfmChatModelDescriptor,
-	type IfmDiscovery,
-} from "./discovery.ts";
+import { createIfmDiscovery, IFM_COMPAT, type IfmChatModelDescriptor, type IfmDiscovery } from "./discovery.ts";
 
 export interface CreateIfmProviderOptions {
 	/** Share a discovery instance with the extension so `/ifm status` sees refresh state. */

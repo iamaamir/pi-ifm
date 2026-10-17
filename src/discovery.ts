@@ -100,12 +100,7 @@ export interface IfmDiscoveryContext {
 export interface IfmDiscoveryOptions {
 	fetchImpl?: typeof fetch;
 	/** Override capability probing (used by tests). */
-	probeChat?: (
-		baseUrl: string,
-		apiKey: string,
-		modelId: string,
-		signal: AbortSignal,
-	) => Promise<ChatCapability>;
+	probeChat?: (baseUrl: string, apiKey: string, modelId: string, signal: AbortSignal) => Promise<ChatCapability>;
 	now?: () => number;
 	sleep?: (ms: number) => Promise<void>;
 }
@@ -241,10 +236,9 @@ export interface IfmDiscovery {
 export function createIfmDiscovery(options: IfmDiscoveryOptions = {}): IfmDiscovery {
 	const fetchImpl = options.fetchImpl ?? fetch;
 	const now = options.now ?? (() => Date.now());
-	const sleep =
-		options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
-	const probeChat = options.probeChat ?? ((baseUrl, apiKey, id, signal) =>
-		probeChatSupport(baseUrl, apiKey, id, signal, fetchImpl));
+	const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+	const probeChat =
+		options.probeChat ?? ((baseUrl, apiKey, id, signal) => probeChatSupport(baseUrl, apiKey, id, signal, fetchImpl));
 
 	const probeCache = new Map<string, { capability: ChatCapability; at: number }>();
 	let lastProbeAt = 0;
@@ -254,7 +248,12 @@ export function createIfmDiscovery(options: IfmDiscoveryOptions = {}): IfmDiscov
 		lastProbeCount: 0,
 	};
 
-	async function cachedProbe(baseUrl: string, apiKey: string, id: string, signal: AbortSignal): Promise<ChatCapability> {
+	async function cachedProbe(
+		baseUrl: string,
+		apiKey: string,
+		id: string,
+		signal: AbortSignal,
+	): Promise<ChatCapability> {
 		const cached = probeCache.get(id);
 		if (cached && now() - cached.at < IFM_PROBE_CACHE_TTL_MS) return cached.capability;
 

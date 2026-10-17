@@ -6,18 +6,14 @@
  * `/ifm status` and `/ifm refresh`.
  */
 
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import {
-	IFM_API_KEY_ENV,
-	IFM_DEFAULT_BASE_URL,
-	IFM_PROVIDER_ID,
-} from "./constants.ts";
+import { IFM_API_KEY_ENV, IFM_DEFAULT_BASE_URL, IFM_PROVIDER_ID } from "./constants.ts";
 import { createIfmDiscovery } from "./discovery.ts";
 import { normalizeIfmRequestPayload } from "./normalize.ts";
 import { createIfmProvider } from "./provider.ts";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { homedir } from "node:os";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
@@ -111,7 +107,7 @@ export function makeIfmCleaner() {
 	let carried = "";
 
 	function contentLine(text: string): string {
-		return "data: " + JSON.stringify({ choices: [{ index: 0, delta: { content: text }, finish_reason: null }] });
+		return `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: text }, finish_reason: null }] })}`;
 	}
 
 	function takeBuffer(): string | null {
@@ -158,7 +154,7 @@ export function makeIfmCleaner() {
 				const nd = { ...delta, content: rest };
 				if (reasoning) nd.reasoning_content = reasoning;
 				obj.choices[0].delta = nd;
-				return ["data: " + JSON.stringify(obj)];
+				return [`data: ${JSON.stringify(obj)}`];
 			}
 			return [];
 		}
@@ -174,18 +170,18 @@ export function makeIfmCleaner() {
 			carried = lines.pop() ?? "";
 			for (const line of lines) {
 				for (const out of rewriteLine(line.trimEnd())) {
-					controller.enqueue(encoder.encode(out + "\n\n"));
+					controller.enqueue(encoder.encode(`${out}\n\n`));
 				}
 			}
 		},
 		flush(controller) {
 			if (carried) {
 				for (const out of rewriteLine(carried.trimEnd())) {
-					controller.enqueue(encoder.encode(out + "\n\n"));
+					controller.enqueue(encoder.encode(`${out}\n\n`));
 				}
 			}
 			const pre = takeBuffer();
-			if (pre) controller.enqueue(encoder.encode(pre + "\n\n"));
+			if (pre) controller.enqueue(encoder.encode(`${pre}\n\n`));
 			controller.terminate();
 		},
 	});
@@ -207,7 +203,7 @@ function readIfmConfig(): { baseUrl?: string } {
 function writeIfmConfig(config: { baseUrl?: string }): void {
 	const file = ifmConfigPath();
 	mkdirSync(dirname(file), { recursive: true });
-	writeFileSync(file, JSON.stringify(config, null, 2) + "\n", "utf8");
+	writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`, "utf8");
 }
 
 export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
@@ -257,7 +253,7 @@ export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
 
 	pi.on("message_end", (event, ctx) => {
 		const message = event?.message;
-		if (!message || message.role !== "assistant") return;
+		if (message?.role !== "assistant") return;
 		if (message.stopReason !== "error") return;
 		if (message.provider !== IFM_PROVIDER_ID && ctx?.model?.provider !== IFM_PROVIDER_ID) return;
 
@@ -372,13 +368,8 @@ export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
 		g.fetch = async (input: any, init?: any) => {
 			const res = await origFetch(input, init);
 			try {
-				const url =
-					typeof input === "string"
-						? input
-						: input instanceof URL
-							? input.href
-							: input?.url;
-				if (!url || !url.includes(ifmHost)) return res;
+				const url = typeof input === "string" ? input : input instanceof URL ? input.href : input?.url;
+				if (!url?.includes(ifmHost)) return res;
 				const ct = res.headers?.get?.("content-type") ?? "";
 				if (!ct.includes("event-stream") || !res.body) return res;
 				return new Response(res.body.pipeThrough(makeIfmCleaner()), {

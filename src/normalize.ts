@@ -12,11 +12,6 @@
  * fails with an actionable message instead of sending an invalid array.
  */
 
-interface ContentPart {
-	type?: unknown;
-	text?: unknown;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
