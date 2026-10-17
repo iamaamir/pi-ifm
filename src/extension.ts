@@ -363,14 +363,19 @@ export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
 
 	// Patch fetch once per process to repair leaked reasoning in SSE streams.
 	const ifmHost = baseUrl.replace(/^https?:\/\//, "").split("/")[0] || "api.ifm.ai";
-	const g = globalThis as any;
+	const g = globalThis as Record<string, unknown>;
 	if (!g.__ifmFetchPatched) {
 		g.__ifmFetchPatched = true;
 		const origFetch = globalThis.fetch.bind(globalThis);
 		g.fetch = async (input: unknown, init?: unknown) => {
 			const res = await origFetch(input as Parameters<typeof fetch>[0], init as RequestInit);
 			try {
-				const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as { url?: string } | null)?.url;
+				const url =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: (input as { url?: string } | null)?.url;
 				if (!url?.includes(ifmHost)) return res;
 				const ct = res.headers?.get?.("content-type") ?? "";
 				if (!ct.includes("event-stream") || !res.body) return res;
