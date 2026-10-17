@@ -16,7 +16,7 @@ pi -e git:github.com/iamaamir/pi-ifm
 
 ## Authenticate
 
-Set an environment variable:
+Set an environment variable. `IFM_API_TOKEN` is checked first, then `IFM_API_KEY`:
 
 ```bash
 export IFM_API_KEY="IFM-..."
@@ -72,6 +72,7 @@ Verified against `api.ifm.ai`:
 - Every replayed assistant message includes a thinking field. `reasoning_content` is the canonical field. An empty string is valid. A missing or null field causes a 400 error.
 - Traces are replayed verbatim, so multi-turn history stays consistent.
 - Session routing uses one stable `X-Session-ID` for the whole conversation.
+- The base URL can be changed with `IFM_BASE_URL` or `/ifm config`.
 - System, assistant, tool-call, and tool-result messages are passed through unchanged, so tool-call correlation IDs and multi-turn history are preserved.
 - Image and multimodal input are not supported by IFM. `pi-ifm` fails with a clear error instead of silently dropping the attachment.
 - `thinking_token_budget`, `tool_call_format`, and `tool_presentation_format` were tested and are rejected by the current API, so they are not sent.
