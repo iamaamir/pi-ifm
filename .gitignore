@@ -1,4 +1,2 @@
 node_modules/
-*.tgz
-.pi/
-.DS_Store
+bun.lock
