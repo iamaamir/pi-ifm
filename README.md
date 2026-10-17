@@ -102,5 +102,3 @@ Tests use mock HTTP fixtures for discovery, refreshes, malformed responses, cata
 ## License
 
 MIT
-EOF
-echo done
