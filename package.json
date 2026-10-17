@@ -7,7 +7,7 @@
 	"author": "pi-ifm contributors",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/mak/pi-ifm.git"
+		"url": "git+https://github.com/iamaamir/pi-ifm.git"
 	},
 	"keywords": [
 		"pi-package",
