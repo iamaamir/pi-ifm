@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
 	createIfmDiscovery,
+	describeModel,
 	deriveDisplayName,
 	IFM_THINKING_LEVEL_MAP,
 	isObviouslyNonChat,
@@ -54,6 +55,14 @@ describe("model id helpers", () => {
 		expect(IFM_THINKING_LEVEL_MAP.medium).toBe("low");
 		expect(IFM_THINKING_LEVEL_MAP.high).toBe("high");
 		expect(IFM_THINKING_LEVEL_MAP.off).toBeNull();
+	});
+});
+
+describe("describeModel", () => {
+	test("uses IFM model metadata for known models", () => {
+		const model = describeModel("IFM/K2-Horizon-375B-A23B", "ifm", "https://api.ifm.ai/v1");
+		expect(model.contextWindow).toBe(524288);
+		expect(model.samplingParams).toEqual({ temperature: 0.2 });
 	});
 });
 

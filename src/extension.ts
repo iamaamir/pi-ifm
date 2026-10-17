@@ -7,7 +7,11 @@
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { IFM_API_KEY_ENV, IFM_PROVIDER_ID } from "./constants.ts";
+import {
+	IFM_API_KEY_ENV,
+	IFM_DEFAULT_BASE_URL,
+	IFM_PROVIDER_ID,
+} from "./constants.ts";
 import { createIfmDiscovery } from "./discovery.ts";
 import { normalizeIfmRequestPayload } from "./normalize.ts";
 import { createIfmProvider } from "./provider.ts";
@@ -61,7 +65,7 @@ function formatStatus(ctx: ExtensionContext, discovery: ReturnType<typeof create
 		`auth: ${authLine}`,
 		`models: ${modelCount}`,
 		`catalog: ${catalogLine}`,
-		"compat: store disabled, developer role disabled, reasoning via chat_template_kwargs",
+		"compat: store disabled, developer role disabled, reasoning via top-level reasoning_effort",
 	];
 	if (state.lastError) lines.push(`discovery error: ${state.lastError}`);
 	const registryError = ctx.modelRegistry.getError();
@@ -71,20 +75,180 @@ function formatStatus(ctx: ExtensionContext, discovery: ReturnType<typeof create
 	return lines.join("\n");
 }
 
-export default function ifmExtension(pi: ExtensionAPI): void {
+const THINK_CLOSE_TAGS = ["</ifm|think_faster>", "</ifm|think_fast>", "</ifm|think>"];
+const THINK_OPEN_TAGS = ["<ifm|think_faster>", "<ifm|think_fast>", "<ifm|think>"];
+
+function splitOnThinkTag(text: string): [string, string] | null {
+	let t = text;
+	for (const open of THINK_OPEN_TAGS) {
+		if (t.startsWith(open)) {
+			t = t.slice(open.length);
+			break;
+		}
+	}
+	let best = -1;
+	let bestLen = 0;
+	for (const close of THINK_CLOSE_TAGS) {
+		const i = t.indexOf(close);
+		if (i !== -1 && (best === -1 || i < best)) {
+			best = i;
+			bestLen = close.length;
+		}
+	}
+	if (best === -1) return null;
+	return [t.slice(0, best), t.slice(best + bestLen)];
+}
+
+export function makeIfmCleaner() {
+	const encoder = new TextEncoder();
+	const decoder = new TextDecoder();
+	let seenReasoningField = false;
+	let emitted = false;
+	let buffer = "";
+	let carried = "";
+
+	function contentLine(text: string): string {
+		return "data: " + JSON.stringify({ choices: [{ index: 0, delta: { content: text }, finish_reason: null }] });
+	}
+
+	function takeBuffer(): string | null {
+		if (!buffer || emitted) {
+			buffer = "";
+			return null;
+		}
+		const held = buffer;
+		buffer = "";
+		emitted = true;
+		return contentLine(held);
+	}
+
+	function rewriteLine(line: string): string[] {
+		if (!line.startsWith("data: ")) return [line];
+		const raw = line.slice(6);
+		if (raw === "[DONE]") return [line];
+		let obj: any;
+		try {
+			obj = JSON.parse(raw);
+		} catch {
+			return [line];
+		}
+		const delta = obj?.choices?.[0]?.delta;
+		if (!delta) return [line];
+
+		if (delta.reasoning || delta.reasoning_content) {
+			seenReasoningField = true;
+			const pre = takeBuffer();
+			return pre ? [pre, line] : [line];
+		}
+
+		if (typeof delta.content === "string" && delta.content !== "") {
+			if (seenReasoningField || emitted) {
+				emitted = true;
+				return [line];
+			}
+			buffer += delta.content;
+			const cut = splitOnThinkTag(buffer);
+			if (cut) {
+				const [reasoning, rest] = cut;
+				buffer = "";
+				emitted = true;
+				const nd = { ...delta, content: rest };
+				if (reasoning) nd.reasoning_content = reasoning;
+				obj.choices[0].delta = nd;
+				return ["data: " + JSON.stringify(obj)];
+			}
+			return [];
+		}
+
+		const pre = takeBuffer();
+		return pre ? [pre, line] : [line];
+	}
+
+	return new TransformStream<Uint8Array, Uint8Array>({
+		transform(chunk, controller) {
+			carried += decoder.decode(chunk, { stream: true });
+			const lines = carried.split("\n");
+			carried = lines.pop() ?? "";
+			for (const line of lines) {
+				for (const out of rewriteLine(line.trimEnd())) {
+					controller.enqueue(encoder.encode(out + "\n\n"));
+				}
+			}
+		},
+		flush(controller) {
+			if (carried) {
+				for (const out of rewriteLine(carried.trimEnd())) {
+					controller.enqueue(encoder.encode(out + "\n\n"));
+				}
+			}
+			const pre = takeBuffer();
+			if (pre) controller.enqueue(encoder.encode(pre + "\n\n"));
+			controller.terminate();
+		},
+	});
+}
+
+export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
 	const discovery = createIfmDiscovery();
+	const provider = createIfmProvider({ discovery });
 
-	pi.registerProvider(createIfmProvider({ discovery }));
+	// Warm the catalog at startup, bounded so startup never hangs.
+	if (!process.env.PI_OFFLINE) {
+		const key = (process.env.IFM_API_TOKEN || process.env.IFM_API_KEY || "").trim();
+		if (key) {
+			try {
+				await Promise.race([
+					provider.refreshModels?.({
+						credential: { type: "api_key", key },
+						allowNetwork: true,
+						signal: new AbortController().signal,
+						baseUrl: process.env.IFM_BASE_URL ?? IFM_DEFAULT_BASE_URL,
+						publish: async (publication) => {
+							publication.update?.();
+							return true;
+						},
+					}),
+					new Promise((resolve) => setTimeout(() => resolve(null), 5000)),
+				]);
+			} catch {
+				// Keep the static/last-known catalog.
+			}
+		}
+	}
 
-	// IFM requires string content for text messages and rejects typed text
-	// arrays. Only IFM payloads are touched.
+	pi.registerProvider(provider);
+
+	pi.on("before_provider_headers", (event, ctx) => {
+		if (ctx.model?.provider !== IFM_PROVIDER_ID) return;
+		const sessionId = ctx.sessionManager?.getSessionId?.();
+		if (typeof sessionId === "string" && sessionId.length > 0) {
+			event.headers = { ...event.headers, "X-Session-ID": sessionId };
+		}
+	});
+
 	pi.on("before_provider_request", (event, ctx) => {
 		if (ctx.model?.provider !== IFM_PROVIDER_ID) return;
 		return normalizeIfmRequestPayload(event.payload);
 	});
 
-	// IFM may route a request to an upstream model whose id differs from the
-	// requested one. Surface it once per pair instead of rewriting the model id.
+	pi.on("message_end", (event, ctx) => {
+		const message = event?.message;
+		if (!message || message.role !== "assistant") return;
+		if (message.stopReason !== "error") return;
+		if (message.provider !== IFM_PROVIDER_ID && ctx?.model?.provider !== IFM_PROVIDER_ID) return;
+
+		const errorMessage = message.errorMessage ?? "";
+		if (errorMessage.includes("context_length_exceeded")) return;
+		if (!/request_too_large|exceeds the model context/i.test(errorMessage)) return;
+
+		return {
+			message: {
+				...message,
+				errorMessage: `context_length_exceeded: ${errorMessage}`,
+			},
+		};
+	});
+
 	const reportedMismatches = new Set<string>();
 	pi.on("provider_stream_event", (event, ctx) => {
 		if (event.provider !== IFM_PROVIDER_ID) return;
@@ -129,4 +293,33 @@ export default function ifmExtension(pi: ExtensionAPI): void {
 			ctx.ui.notify("Usage: /ifm [status|refresh]", "warning");
 		},
 	});
+
+	// Patch fetch once per process to repair leaked reasoning in SSE streams.
+	const ifmHost = (process.env.IFM_BASE_URL ?? IFM_DEFAULT_BASE_URL).replace(/^https?:\/\//, "").split("/")[0] || "api.ifm.ai";
+	const g = globalThis as any;
+	if (!g.__ifmFetchPatched) {
+		g.__ifmFetchPatched = true;
+		const origFetch = globalThis.fetch.bind(globalThis);
+		g.fetch = async (input: any, init?: any) => {
+			const res = await origFetch(input, init);
+			try {
+				const url =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input?.url;
+				if (!url || !url.includes(ifmHost)) return res;
+				const ct = res.headers?.get?.("content-type") ?? "";
+				if (!ct.includes("event-stream") || !res.body) return res;
+				return new Response(res.body.pipeThrough(makeIfmCleaner()), {
+					status: res.status,
+					statusText: res.statusText,
+					headers: res.headers,
+				});
+			} catch {
+				return res;
+			}
+		};
+	}
 }

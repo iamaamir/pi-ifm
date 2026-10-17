@@ -66,6 +66,16 @@ describe("createIfmProvider", () => {
 		expect(result?.source).toBe("IFM_API_KEY");
 	});
 
+	test("resolves the token from the environment", async () => {
+		const provider = createIfmProvider({ discovery: fakeDiscovery([]) });
+		const result = await provider.auth.apiKey!.resolve({
+			ctx: { env: async (name) => (name === "IFM_API_TOKEN" ? "token-key" : undefined), fileExists: async () => false },
+			signal: new AbortController().signal,
+		});
+		expect(result?.auth.apiKey).toBe("token-key");
+		expect(result?.source).toBe("IFM_API_TOKEN");
+	});
+
 	test("publishes discovered models", async () => {
 		const provider = createIfmProvider({ discovery: fakeDiscovery([descriptor]) });
 		const publishCalls: unknown[] = [];

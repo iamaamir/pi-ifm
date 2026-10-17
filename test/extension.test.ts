@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import ifmExtension from "../src/extension.ts";
+import { makeIfmCleaner } from "../src/extension.ts";
 import { IFM_PROVIDER_ID } from "../src/constants.ts";
 
 type Handler = (event: any, ctx: any) => unknown;
@@ -54,6 +55,77 @@ describe("ifm extension", () => {
 		const normalized = handler({ payload }, context().ctx) as typeof payload;
 		expect(normalized.messages[0]!.content).toBe("hi");
 		expect(handler({ payload }, context({ model: { provider: "other" } }).ctx)).toBeUndefined();
+	});
+
+	test("adds a session id header for IFM", () => {
+		const { pi, handlers } = createFakePi();
+		ifmExtension(pi);
+		const handler = handlers.get("before_provider_headers")![0]!;
+		const { ctx } = context({
+			sessionManager: { getSessionId: () => "session-123" },
+		});
+		const event = { headers: {} as Record<string, string> };
+		handler(event, ctx);
+		expect(event.headers["X-Session-ID"]).toBe("session-123");
+	});
+
+	test("normalizes context overflow errors", () => {
+		const { pi, handlers } = createFakePi();
+		ifmExtension(pi);
+		const handler = handlers.get("message_end")![0]!;
+		const { ctx } = context();
+		const message = {
+			role: "assistant",
+			stopReason: "error",
+			provider: IFM_PROVIDER_ID,
+			errorMessage: "request_too_large: prompt exceeds context",
+		};
+		const result = handler({ message }, ctx) as { message: { errorMessage: string } };
+		expect(result.message.errorMessage).toContain("context_length_exceeded");
+	});
+
+	test("repairs leaked reasoning in one chunk", async () => {
+		const stream = makeIfmCleaner();
+		const writer = stream.writable.getWriter();
+		const reader = stream.readable.getReader();
+		const encoder = new TextEncoder();
+		const decoder = new TextDecoder();
+		const writing = (async () => {
+			await writer.write(encoder.encode('data: {"choices":[{"index":0,"delta":{"content":"thinking</ifm|think>answer"}}]}\n'));
+			await writer.close();
+		})();
+		let output = "";
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			output += decoder.decode(value, { stream: true });
+		}
+		await writing;
+		expect(output).toContain("reasoning_content");
+		expect(output).toContain("answer");
+		expect(output).toContain("\n\n");
+	});
+
+	test("repairs leaked reasoning across segmented chunks", async () => {
+		const stream = makeIfmCleaner();
+		const writer = stream.writable.getWriter();
+		const reader = stream.readable.getReader();
+		const encoder = new TextEncoder();
+		const decoder = new TextDecoder();
+		const writing = (async () => {
+			await writer.write(encoder.encode('data: {"choices":[{"index":0,"delta":{"content":"thinking</ifm|thi'));
+			await writer.write(encoder.encode('nk>answer"}}]}\n'));
+			await writer.close();
+		})();
+		let output = "";
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			output += decoder.decode(value, { stream: true });
+		}
+		await writing;
+		expect(output).toContain("reasoning_content");
+		expect(output).toContain("answer");
 	});
 
 	test("warns when a response names a different upstream model", () => {

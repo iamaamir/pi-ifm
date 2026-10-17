@@ -21,6 +21,7 @@ import {
 	IFM_CHAT_PATH,
 	IFM_DEFAULT_CONTEXT_WINDOW,
 	IFM_DEFAULT_MAX_TOKENS,
+	IFM_MODEL_INFO,
 	IFM_MODELS_PATH,
 	IFM_NON_CHAT_PATTERN,
 	IFM_PROBE_CACHE_TTL_MS,
@@ -53,10 +54,10 @@ export const IFM_THINKING_LEVEL_MAP: Record<string, string | null> = {
 export const IFM_COMPAT = {
 	supportsStore: false,
 	supportsDeveloperRole: false,
-	thinkingFormat: "chat-template",
-	chatTemplateKwargs: {
-		reasoning_effort: { $var: "thinking.effort", omitWhenOff: true },
-	},
+	supportsReasoningEffort: true,
+	supportsStrictMode: false,
+	maxTokensField: "max_tokens",
+	requiresReasoningContentOnAssistantMessages: true,
 } as const;
 
 /** Plain descriptor for one discovered chat model. */
@@ -71,6 +72,7 @@ export interface IfmChatModelDescriptor {
 	contextWindow: number;
 	maxTokens: number;
 	reasoning: boolean;
+	samplingParams?: { temperature?: number };
 	thinkingLevelMap: Record<string, string | null>;
 	compat: typeof IFM_COMPAT;
 }
@@ -146,18 +148,23 @@ export function deriveDisplayName(modelId: string): string {
 
 /** Build a conservative descriptor for a confirmed chat model. */
 export function describeModel(modelId: string, providerId: string, baseUrl: string): IfmChatModelDescriptor {
+	const info = IFM_MODEL_INFO[modelId] ?? {
+		contextWindow: IFM_DEFAULT_CONTEXT_WINDOW,
+		maxTokens: IFM_DEFAULT_MAX_TOKENS,
+	};
 	return {
 		id: modelId,
-		name: deriveDisplayName(modelId),
+		name: info.name ?? deriveDisplayName(modelId),
 		api: "openai-completions",
 		provider: providerId,
 		baseUrl,
 		input: ["text"],
 		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-		contextWindow: IFM_DEFAULT_CONTEXT_WINDOW,
-		maxTokens: IFM_DEFAULT_MAX_TOKENS,
+		contextWindow: info.contextWindow,
+		maxTokens: info.maxTokens,
 		reasoning: true,
 		thinkingLevelMap: IFM_THINKING_LEVEL_MAP,
+		samplingParams: { temperature: 0.2 },
 		compat: IFM_COMPAT,
 	};
 }

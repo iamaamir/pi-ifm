@@ -12,6 +12,7 @@ export const IFM_PROVIDER_ID = "ifm";
 export const IFM_PROVIDER_NAME = "IFM";
 export const IFM_DEFAULT_BASE_URL = "https://api.ifm.ai/v1";
 export const IFM_API_KEY_ENV = "IFM_API_KEY";
+export const IFM_API_TOKEN_ENV = "IFM_API_TOKEN";
 
 /** Path (relative to the base URL) used for live model discovery. */
 export const IFM_MODELS_PATH = "/models";
@@ -26,6 +27,12 @@ export const IFM_CHAT_PATH = "/chat/completions";
 export const IFM_DEFAULT_CONTEXT_WINDOW = 131_072;
 /** Conservative default maximum output tokens. */
 export const IFM_DEFAULT_MAX_TOKENS = 32_768;
+
+/** Per-model catalog defaults for known IFM models. Unknown models use the conservative defaults below. */
+export const IFM_MODEL_INFO: Record<string, { name?: string; contextWindow: number; maxTokens: number }> = {
+	"IFM/K2-Horizon-375B-A23B": { name: "K2 Horizon 375B (A23B)", contextWindow: 524288, maxTokens: 32768 },
+	"IFM/K2-Think-v2": { name: "K2 Think v2", contextWindow: 131072, maxTokens: 32768 },
+};
 
 /** Cache lifetime for capability probes within one process. */
 export const IFM_PROBE_CACHE_TTL_MS = 10 * 60 * 1000;

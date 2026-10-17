@@ -16,10 +16,12 @@ import {
 } from "@earendil-works/pi-ai/compat";
 import {
 	IFM_API_KEY_ENV,
+	IFM_API_TOKEN_ENV,
 	IFM_DEFAULT_BASE_URL,
 	IFM_PROVIDER_ID,
 	IFM_PROVIDER_NAME,
 } from "./constants.ts";
+import { IFM_COMPAT } from "./discovery.ts";
 import {
 	createIfmDiscovery,
 	type IfmChatModelDescriptor,
@@ -38,7 +40,12 @@ function stripTrailingSlash(url: string): string {
 
 /** Convert a plain descriptor into a Pi chat model. */
 export function toIfmModel(descriptor: IfmChatModelDescriptor): Model<"openai-completions"> {
-	return { ...descriptor } as Model<"openai-completions">;
+	return {
+		...descriptor,
+		// Keep IFM's wire contract current even for catalogs restored from an
+		// older persisted version: a missing thinking flag breaks multi-turn.
+		compat: { ...IFM_COMPAT, ...descriptor.compat, requiresReasoningContentOnAssistantMessages: true },
+	} as Model<"openai-completions">;
 }
 
 /**
@@ -55,7 +62,16 @@ export function createIfmProvider(options: CreateIfmProviderOptions = {}): Provi
 		name: IFM_PROVIDER_NAME,
 		baseUrl: defaultBaseUrl,
 		auth: {
-			apiKey: envApiKeyAuth("IFM API key", [IFM_API_KEY_ENV]),
+			apiKey: (() => {
+				const auth = envApiKeyAuth("IFM API key", [IFM_API_TOKEN_ENV, IFM_API_KEY_ENV]);
+				auth.login = async (interaction) => {
+					interaction.signal.throwIfAborted();
+					const key = await interaction.prompt({ type: "secret", message: "Enter IFM API key" });
+					interaction.signal.throwIfAborted();
+					return { type: "api_key", key: key.trim() };
+				};
+				return auth;
+			})(),
 		},
 		models: [],
 		api: openAICompletionsApi(),
@@ -63,7 +79,10 @@ export function createIfmProvider(options: CreateIfmProviderOptions = {}): Provi
 			const apiKey = context.credential?.type === "api_key" ? context.credential.key : undefined;
 			const storedModels = (context.stored?.models ?? [])
 				.filter((model) => model.provider === IFM_PROVIDER_ID)
-				.map((model) => model as unknown as IfmChatModelDescriptor);
+				.map((model) => ({
+					...(model as unknown as IfmChatModelDescriptor),
+					baseUrl: context.baseUrl ?? (model as unknown as IfmChatModelDescriptor).baseUrl,
+				}));
 
 			// No credential: keep whatever Pi already restored.
 			if (!apiKey) return storedModels.map(toIfmModel);

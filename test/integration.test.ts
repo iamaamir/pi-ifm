@@ -93,7 +93,9 @@ describe("provider streaming through the OpenAI Completions adapter", () => {
 		// The extension hook converted the typed array to a string before send.
 		expect(captured.body.messages[0].content).toBe("hi");
 		expect(captured.body.store).toBeUndefined();
-		expect(captured.body.chat_template_kwargs).toEqual({ reasoning_effort: "low" });
+		expect(captured.body.reasoning_effort).toBe("low");
+		expect(captured.body.temperature).toBe(0.2);
+		expect(captured.body.chat_template_kwargs).toBeUndefined();
 	});
 
 	test("streams a tool call with parsed arguments", async () => {
