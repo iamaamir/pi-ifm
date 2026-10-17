@@ -51,7 +51,7 @@ Select a model and start working. Model discovery runs at startup, after login, 
 
 The successful catalog is cached by Pi and restored on the next launch, so Pi started without network still shows the last known models. A failed or empty refresh never replaces a healthy catalog.
 
-IFM's model list does not publish context windows, output limits, prices, or per-model capabilities. `pi-ifm` therefore uses conservative defaults for every discovered chat model. You can override any field per model through `models.json` if your account needs different limits.
+IFM's model list does not publish output limits, prices, or per-model capabilities. Known models use their documented context windows; other models use conservative defaults. You can override any field per model through `models.json` if your account needs different limits.
 
 ## Wire compatibility
 
@@ -60,7 +60,7 @@ Verified against `api.ifm.ai`:
 - Text-only user content arrays are converted to strings. IFM rejects typed content arrays with `Invalid value for 'messages.content'`.
 - `store` is disabled (`supportsStore: false`).
 - The unsupported `developer` role is disabled (`supportsDeveloperRole: false`).
-- Reasoning effort is sent through `chat_template_kwargs.reasoning_effort`.
+- Reasoning effort is sent as a top-level `reasoning_effort` field.
   IFM's hosted endpoint currently loops when asked for `medium` reasoning, so Pi's default `medium` is mapped to IFM `low`; `high` and above map to IFM `high`. Use `/think high` for deeper reasoning.
 - Every replayed assistant message includes a thinking field. `reasoning_content` is the canonical field. An empty string is valid. A missing or null field causes a 400 error.
 - Traces are replayed verbatim, so multi-turn history stays consistent.
@@ -77,16 +77,16 @@ If an IFM response identifies a model different from the one Pi requested, `/ifm
 
 ## Known limitations
 
-- `GET /v1/models` publishes no per-model metadata. Every discovered chat model uses conservative defaults (131,072-token context, 32,768 output tokens, zero cost). Override a model in `models.json` to change these.
+- `GET /v1/models` publishes no per-model metadata. Known models use documented context windows; other models use conservative defaults (131,072-token context, 32,768 output tokens, zero cost). Override a model in `models.json` to change these.
 - IFM chat models return a `reasoning` field and support tool calling; both are enabled for every discovered chat model.
-- `pi auth check --provider ifm` reports `provider_not_found` because Pi's auth check does not load extension providers. Use `/ifm status`, which does. `/login ifm` and `IFM_API_KEY` both work in a normal Pi session.
+- `/login ifm` and `IFM_API_KEY` both work in a normal Pi session. Use `/ifm status` to check auth.
 
 ## Development
 
 ```bash
-bun install
-bun test
-bun run typecheck
+npm install
+npm test
+npm run typecheck
 ```
 
 Tests use mock HTTP fixtures for discovery, refreshes, malformed responses, catalog outages, request normalization, and command behavior.
