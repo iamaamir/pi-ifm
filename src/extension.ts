@@ -46,7 +46,7 @@ function formatStatus(ctx: ExtensionContext, discovery: ReturnType<typeof create
 
 	const state = discovery.state();
 	const modelCount = ifmModelCount(ctx);
-	const offline = process.env["PI_OFFLINE"] !== undefined;
+	const offline = process.env.PI_OFFLINE !== undefined;
 	let catalogLine: string;
 	if (state.lastSource === "network" && state.lastSuccessAt) {
 		catalogLine = `live; last refresh ${new Date(state.lastSuccessAt).toISOString()}`;
@@ -125,13 +125,14 @@ export function makeIfmCleaner() {
 		if (!line.startsWith("data: ")) return [line];
 		const raw = line.slice(6);
 		if (raw === "[DONE]") return [line];
-		let obj: any;
+		let obj: Record<string, unknown> | null = null;
 		try {
-			obj = JSON.parse(raw);
+			obj = JSON.parse(raw) as Record<string, unknown>;
 		} catch {
 			return [line];
 		}
-		const delta = obj?.choices?.[0]?.delta;
+		const choices = Array.isArray(obj?.choices) ? obj.choices : [];
+		const delta = (choices[0] as { delta?: Record<string, unknown> } | undefined)?.delta;
 		if (!delta) return [line];
 
 		if (delta.reasoning || delta.reasoning_content) {
@@ -151,9 +152,10 @@ export function makeIfmCleaner() {
 				const [reasoning, rest] = cut;
 				buffer = "";
 				emitted = true;
-				const nd = { ...delta, content: rest };
+				const nd = { ...delta, content: rest } as Record<string, unknown>;
 				if (reasoning) nd.reasoning_content = reasoning;
-				obj.choices[0].delta = nd;
+				const choice = choices[0] as { delta: Record<string, unknown> };
+				choice.delta = nd;
 				return [`data: ${JSON.stringify(obj)}`];
 			}
 			return [];
@@ -188,7 +190,7 @@ export function makeIfmCleaner() {
 }
 
 function ifmConfigPath(): string {
-	const base = process.env["PI_CODING_AGENT_DIR"] ?? join(homedir(), ".pi", "agent");
+	const base = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
 	return join(base, "ifm.json");
 }
 
@@ -209,12 +211,12 @@ function writeIfmConfig(config: { baseUrl?: string }): void {
 export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
 	const discovery = createIfmDiscovery();
 	const config = readIfmConfig();
-	const baseUrl = process.env["IFM_BASE_URL"] ?? config.baseUrl ?? IFM_DEFAULT_BASE_URL;
+	const baseUrl = process.env.IFM_BASE_URL ?? config.baseUrl ?? IFM_DEFAULT_BASE_URL;
 	const provider = createIfmProvider({ discovery, baseUrl });
 
 	// Warm the catalog at startup, bounded so startup never hangs.
-	if (!process.env["PI_OFFLINE"]) {
-		const key = (process.env["IFM_API_TOKEN"] || process.env["IFM_API_KEY"] || "").trim();
+	if (!process.env.PI_OFFLINE) {
+		const key = (process.env.IFM_API_TOKEN || process.env.IFM_API_KEY || "").trim();
 		if (key) {
 			try {
 				await Promise.race([
@@ -272,8 +274,7 @@ export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
 	const reportedMismatches = new Set<string>();
 	pi.on("provider_stream_event", (event, ctx) => {
 		if (event.provider !== IFM_PROVIDER_ID) return;
-		const actual =
-			isRecord(event["data"]) && typeof event["data"]["model"] === "string" ? event["data"]["model"] : undefined;
+		const actual = isRecord(event.data) && typeof event.data.model === "string" ? event.data.model : undefined;
 		if (!actual || actual === event.model) return;
 		const key = `${event.model}\u0000${actual}`;
 		if (reportedMismatches.has(key)) return;
@@ -316,7 +317,7 @@ export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
 			}
 
 			if (subcommand === "config") {
-				const current = process.env["IFM_BASE_URL"] ?? readIfmConfig().baseUrl ?? IFM_DEFAULT_BASE_URL;
+				const current = process.env.IFM_BASE_URL ?? readIfmConfig().baseUrl ?? IFM_DEFAULT_BASE_URL;
 				if (typeof ctx.ui?.select !== "function") {
 					ctx.ui.notify(`Base URL: ${current}`, "info");
 					return;
@@ -366,10 +367,10 @@ export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
 	if (!g.__ifmFetchPatched) {
 		g.__ifmFetchPatched = true;
 		const origFetch = globalThis.fetch.bind(globalThis);
-		g.fetch = async (input: any, init?: any) => {
-			const res = await origFetch(input, init);
+		g.fetch = async (input: unknown, init?: unknown) => {
+			const res = await origFetch(input as Parameters<typeof fetch>[0], init as RequestInit);
 			try {
-				const url = typeof input === "string" ? input : input instanceof URL ? input.href : input?.url;
+				const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as { url?: string } | null)?.url;
 				if (!url?.includes(ifmHost)) return res;
 				const ct = res.headers?.get?.("content-type") ?? "";
 				if (!ct.includes("event-stream") || !res.body) return res;

@@ -17,12 +17,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isTextPart(part: unknown): part is { type: "text"; text: string } {
-	return isRecord(part) && part["type"] === "text" && typeof part["text"] === "string";
+	return isRecord(part) && part.type === "text" && typeof part.text === "string";
 }
 
 function isImagePart(part: unknown): boolean {
 	if (!isRecord(part)) return false;
-	return part["type"] === "image" || part["type"] === "image_url" || part["type"] === "input_image";
+	return part.type === "image" || part.type === "image_url" || part.type === "input_image";
 }
 
 /**
@@ -30,22 +30,22 @@ function isImagePart(part: unknown): boolean {
  * changed. Throws when a user turn contains content IFM cannot accept.
  */
 export function normalizeIfmRequestPayload(payload: unknown): unknown {
-	if (!isRecord(payload) || !Array.isArray(payload["messages"])) return payload;
+	if (!isRecord(payload) || !Array.isArray(payload.messages)) return payload;
 
 	let changed = false;
-	const messages = payload["messages"].map((message) => {
-		if (!isRecord(message) || message["role"] !== "user") return message;
-		if (typeof message["content"] === "string") return message;
-		if (!Array.isArray(message["content"])) return message;
+	const messages = payload.messages.map((message) => {
+		if (!isRecord(message) || message.role !== "user") return message;
+		if (typeof message.content === "string") return message;
+		if (!Array.isArray(message.content)) return message;
 
-		const parts = message["content"] as unknown[];
+		const parts = message.content as unknown[];
 		if (parts.length > 0 && parts.every(isTextPart)) {
 			changed = true;
 			return {
 				...message,
 				// Preserve the existing behavior of joining multiple text parts
 				// with newlines so ordering and separation are kept.
-				content: (parts as { text: string }[]).map((part) => part["text"]).join("\n"),
+				content: (parts as { text: string }[]).map((part) => part.text).join("\n"),
 			};
 		}
 

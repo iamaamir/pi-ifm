@@ -118,13 +118,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /** Extract model ids from a `/v1/models` response, preserving order. */
 export function parseModelList(payload: unknown): string[] {
-	if (!isRecord(payload) || !Array.isArray(payload["data"])) {
+	if (!isRecord(payload) || !Array.isArray(payload.data)) {
 		throw new Error("IFM /v1/models returned an unexpected payload (missing 'data' array).");
 	}
 	const ids: string[] = [];
-	for (const item of payload["data"]) {
-		if (isRecord(item) && typeof item["id"] === "string" && item["id"].trim().length > 0) {
-			ids.push(item["id"]);
+	for (const item of payload.data) {
+		if (isRecord(item) && typeof item.id === "string" && item.id.trim().length > 0) {
+			ids.push(item.id);
 		}
 	}
 	return [...new Set(ids)];
@@ -207,10 +207,10 @@ export async function probeChatSupport(
 	}
 
 	const payload = await readErrorPayload(response);
-	const error = isRecord(payload) && isRecord(payload["error"]) ? payload["error"] : undefined;
-	const code = typeof error?.["code"] === "string" ? error["code"] : "";
-	const param = typeof error?.["param"] === "string" ? error["param"] : "";
-	const message = String(error?.["message"] ?? (isRecord(payload) ? payload["detail"] : "") ?? "");
+	const error = isRecord(payload) && isRecord(payload.error) ? payload.error : undefined;
+	const code = typeof error?.code === "string" ? error.code : "";
+	const param = typeof error?.param === "string" ? error.param : "";
+	const message = String(error?.message ?? (isRecord(payload) ? payload.detail : "") ?? "");
 	if (code === "operation_not_supported" || code === "not_found_error") return "non-chat";
 	if (response.status === 404) return "non-chat";
 	if (
@@ -312,7 +312,7 @@ export function createIfmDiscovery(options: IfmDiscoveryOptions = {}): IfmDiscov
 			return models;
 		} catch (error) {
 			if (context.signal.aborted) throw error;
-			state.lastError = error instanceof Error ? error["message"] : String(error);
+			state.lastError = error instanceof Error ? error.message : String(error);
 			state.lastSource = stored.length > 0 ? "cache" : "none";
 			state.lastModelCount = stored.length;
 			// Rethrow so Pi records the refresh error and keeps the restored
