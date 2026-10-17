@@ -190,7 +190,8 @@ export function makeIfmCleaner() {
 
 export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
 	const discovery = createIfmDiscovery();
-	const provider = createIfmProvider({ discovery });
+	const baseUrl = process.env.IFM_BASE_URL ?? IFM_DEFAULT_BASE_URL;
+	const provider = createIfmProvider({ discovery, baseUrl });
 
 	// Warm the catalog at startup, bounded so startup never hangs.
 	if (!process.env.PI_OFFLINE) {
@@ -202,7 +203,7 @@ export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
 						credential: { type: "api_key", key },
 						allowNetwork: true,
 						signal: new AbortController().signal,
-						baseUrl: process.env.IFM_BASE_URL ?? IFM_DEFAULT_BASE_URL,
+						baseUrl,
 						publish: async (publication) => {
 							publication.update?.();
 							return true;
@@ -303,7 +304,7 @@ export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
 	});
 
 	// Patch fetch once per process to repair leaked reasoning in SSE streams.
-	const ifmHost = (process.env.IFM_BASE_URL ?? IFM_DEFAULT_BASE_URL).replace(/^https?:\/\//, "").split("/")[0] || "api.ifm.ai";
+	const ifmHost = baseUrl.replace(/^https?:\/\//, "").split("/")[0] || "api.ifm.ai";
 	const g = globalThis as any;
 	if (!g.__ifmFetchPatched) {
 		g.__ifmFetchPatched = true;
