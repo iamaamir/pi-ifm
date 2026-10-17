@@ -46,7 +46,7 @@ function formatStatus(ctx: ExtensionContext, discovery: ReturnType<typeof create
 
 	const state = discovery.state();
 	const modelCount = ifmModelCount(ctx);
-	const offline = process.env.PI_OFFLINE !== undefined;
+	const offline = process.env["PI_OFFLINE"] !== undefined;
 	let catalogLine: string;
 	if (state.lastSource === "network" && state.lastSuccessAt) {
 		catalogLine = `live; last refresh ${new Date(state.lastSuccessAt).toISOString()}`;
@@ -188,7 +188,7 @@ export function makeIfmCleaner() {
 }
 
 function ifmConfigPath(): string {
-	const base = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
+	const base = process.env["PI_CODING_AGENT_DIR"] ?? join(homedir(), ".pi", "agent");
 	return join(base, "ifm.json");
 }
 
@@ -209,12 +209,12 @@ function writeIfmConfig(config: { baseUrl?: string }): void {
 export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
 	const discovery = createIfmDiscovery();
 	const config = readIfmConfig();
-	const baseUrl = process.env.IFM_BASE_URL ?? config.baseUrl ?? IFM_DEFAULT_BASE_URL;
+	const baseUrl = process.env["IFM_BASE_URL"] ?? config.baseUrl ?? IFM_DEFAULT_BASE_URL;
 	const provider = createIfmProvider({ discovery, baseUrl });
 
 	// Warm the catalog at startup, bounded so startup never hangs.
-	if (!process.env.PI_OFFLINE) {
-		const key = (process.env.IFM_API_TOKEN || process.env.IFM_API_KEY || "").trim();
+	if (!process.env["PI_OFFLINE"]) {
+		const key = (process.env["IFM_API_TOKEN"] || process.env["IFM_API_KEY"] || "").trim();
 		if (key) {
 			try {
 				await Promise.race([
@@ -272,7 +272,8 @@ export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
 	const reportedMismatches = new Set<string>();
 	pi.on("provider_stream_event", (event, ctx) => {
 		if (event.provider !== IFM_PROVIDER_ID) return;
-		const actual = isRecord(event.data) && typeof event.data.model === "string" ? event.data.model : undefined;
+		const actual =
+			isRecord(event["data"]) && typeof event["data"]["model"] === "string" ? event["data"]["model"] : undefined;
 		if (!actual || actual === event.model) return;
 		const key = `${event.model}\u0000${actual}`;
 		if (reportedMismatches.has(key)) return;
@@ -315,7 +316,7 @@ export default async function ifmExtension(pi: ExtensionAPI): Promise<void> {
 			}
 
 			if (subcommand === "config") {
-				const current = process.env.IFM_BASE_URL ?? readIfmConfig().baseUrl ?? IFM_DEFAULT_BASE_URL;
+				const current = process.env["IFM_BASE_URL"] ?? readIfmConfig().baseUrl ?? IFM_DEFAULT_BASE_URL;
 				if (typeof ctx.ui?.select !== "function") {
 					ctx.ui.notify(`Base URL: ${current}`, "info");
 					return;
