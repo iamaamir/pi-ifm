@@ -17,7 +17,7 @@ describe("normalizeIfmRequestPayload", () => {
 			],
 		};
 		const result = normalizeIfmRequestPayload(payload) as typeof payload;
-		expect(result.messages[1]!.content).toBe("first\nsecond");
+		expect(result.messages[1]?.content).toBe("first\nsecond");
 		expect(result.messages[0]).toBe(payload.messages[0]);
 	});
 

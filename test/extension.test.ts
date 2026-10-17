@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import ifmExtension from "../src/extension.ts";
-import { makeIfmCleaner } from "../src/extension.ts";
 import { IFM_PROVIDER_ID } from "../src/constants.ts";
+import ifmExtension, { makeIfmCleaner } from "../src/extension.ts";
 
 type Handler = (event: any, ctx: any) => unknown;
 
@@ -50,17 +49,17 @@ describe("ifm extension", () => {
 	test("normalizes payloads only for the ifm provider", () => {
 		const { pi, handlers } = createFakePi();
 		ifmExtension(pi);
-		const handler = handlers.get("before_provider_request")![0]!;
+		const handler = handlers.get("before_provider_request")?.[0]!;
 		const payload = { messages: [{ role: "user", content: [{ type: "text", text: "hi" }] }] };
 		const normalized = handler({ payload }, context().ctx) as typeof payload;
-		expect(normalized.messages[0]!.content).toBe("hi");
+		expect(normalized.messages[0]?.content).toBe("hi");
 		expect(handler({ payload }, context({ model: { provider: "other" } }).ctx)).toBeUndefined();
 	});
 
 	test("adds a session id header for IFM", () => {
 		const { pi, handlers } = createFakePi();
 		ifmExtension(pi);
-		const handler = handlers.get("before_provider_headers")![0]!;
+		const handler = handlers.get("before_provider_headers")?.[0]!;
 		const { ctx } = context({
 			sessionManager: { getSessionId: () => "session-123" },
 		});
@@ -72,7 +71,7 @@ describe("ifm extension", () => {
 	test("normalizes context overflow errors", () => {
 		const { pi, handlers } = createFakePi();
 		ifmExtension(pi);
-		const handler = handlers.get("message_end")![0]!;
+		const handler = handlers.get("message_end")?.[0]!;
 		const { ctx } = context();
 		const message = {
 			role: "assistant",
@@ -91,7 +90,9 @@ describe("ifm extension", () => {
 		const encoder = new TextEncoder();
 		const decoder = new TextDecoder();
 		const writing = (async () => {
-			await writer.write(encoder.encode('data: {"choices":[{"index":0,"delta":{"content":"thinking</ifm|think>answer"}}]}\n'));
+			await writer.write(
+				encoder.encode('data: {"choices":[{"index":0,"delta":{"content":"thinking</ifm|think>answer"}}]}\n'),
+			);
 			await writer.close();
 		})();
 		let output = "";
@@ -131,19 +132,19 @@ describe("ifm extension", () => {
 	test("warns when a response names a different upstream model", () => {
 		const { pi, handlers } = createFakePi();
 		ifmExtension(pi);
-		const handler = handlers.get("provider_stream_event")![0]!;
+		const handler = handlers.get("provider_stream_event")?.[0]!;
 		const { ctx, notifications } = context();
 		handler({ provider: IFM_PROVIDER_ID, model: "IFM/requested", data: { model: "IFM/actual" } }, ctx);
 		handler({ provider: IFM_PROVIDER_ID, model: "IFM/requested", data: { model: "IFM/actual" } }, ctx);
 		expect(notifications).toHaveLength(1);
-		expect(notifications[0]!.type).toBe("warning");
-		expect(notifications[0]!.message).toContain("IFM/actual");
+		expect(notifications[0]?.type).toBe("warning");
+		expect(notifications[0]?.message).toContain("IFM/actual");
 	});
 
 	test("explains a model scope that hides IFM models", () => {
 		const { pi, handlers } = createFakePi();
 		ifmExtension(pi);
-		const handler = handlers.get("session_start")![0]!;
+		const handler = handlers.get("session_start")?.[0]!;
 		const { ctx, notifications } = context({
 			scopedModels: [{ model: { provider: "anthropic", id: "claude" } }],
 			modelRegistry: {
@@ -155,6 +156,6 @@ describe("ifm extension", () => {
 		});
 		handler({ type: "session_start" }, ctx);
 		expect(notifications).toHaveLength(1);
-		expect(notifications[0]!.message).toContain("scoped");
+		expect(notifications[0]?.message).toContain("scoped");
 	});
 });

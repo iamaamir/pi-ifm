@@ -12,7 +12,7 @@ function json(body: unknown, status = 200): Response {
 }
 
 function sse(events: unknown[]): Response {
-	const body = events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("") + "data: [DONE]\n\n";
+	const body = `${events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("")}data: [DONE]\n\n`;
 	return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream" } });
 }
 
@@ -44,7 +44,7 @@ async function buildProvider(
 
 	const discovery = createIfmDiscovery({ fetchImpl, sleep: async () => {}, probeChat: async () => "chat" });
 	const provider = createIfmProvider({ discovery });
-	await provider.refreshModels!({
+	await provider.refreshModels?.({
 		credential: { type: "api_key", key: "test-key" },
 		allowNetwork: true,
 		signal: new AbortController().signal,
@@ -103,7 +103,11 @@ describe("provider streaming through the OpenAI Completions adapter", () => {
 		const { provider, fetchImpl } = await buildProvider(
 			sse([
 				chunk({ role: "assistant" }),
-				chunk({ tool_calls: [{ index: 0, id: "call_1", type: "function", function: { name: "get_weather", arguments: '{"city":' } }] }),
+				chunk({
+					tool_calls: [
+						{ index: 0, id: "call_1", type: "function", function: { name: "get_weather", arguments: '{"city":' } },
+					],
+				}),
 				chunk({ tool_calls: [{ index: 0, function: { arguments: '"Paris"}' } }] }),
 				chunk({}, { finish_reason: "tool_calls" }),
 			]),
@@ -150,7 +154,14 @@ describe("provider streaming through the OpenAI Completions adapter", () => {
 					api: "openai-completions",
 					provider: "ifm",
 					model: MODEL_ID,
-					usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+					usage: {
+						input: 1,
+						output: 1,
+						cacheRead: 0,
+						cacheWrite: 0,
+						totalTokens: 2,
+						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+					},
 					stopReason: "toolUse",
 					timestamp: 1,
 				} as any,

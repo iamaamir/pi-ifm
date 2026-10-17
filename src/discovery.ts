@@ -100,12 +100,7 @@ export interface IfmDiscoveryContext {
 export interface IfmDiscoveryOptions {
 	fetchImpl?: typeof fetch;
 	/** Override capability probing (used by tests). */
-	probeChat?: (
-		baseUrl: string,
-		apiKey: string,
-		modelId: string,
-		signal: AbortSignal,
-	) => Promise<ChatCapability>;
+	probeChat?: (baseUrl: string, apiKey: string, modelId: string, signal: AbortSignal) => Promise<ChatCapability>;
 	now?: () => number;
 	sleep?: (ms: number) => Promise<void>;
 }
@@ -123,13 +118,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /** Extract model ids from a `/v1/models` response, preserving order. */
 export function parseModelList(payload: unknown): string[] {
-	if (!isRecord(payload) || !Array.isArray(payload.data)) {
+	if (!isRecord(payload) || !Array.isArray(payload["data"])) {
 		throw new Error("IFM /v1/models returned an unexpected payload (missing 'data' array).");
 	}
 	const ids: string[] = [];
-	for (const item of payload.data) {
-		if (isRecord(item) && typeof item.id === "string" && item.id.trim().length > 0) {
-			ids.push(item.id);
+	for (const item of payload["data"]) {
+		if (isRecord(item) && typeof item["id"] === "string" && item["id"].trim().length > 0) {
+			ids.push(item["id"]);
 		}
 	}
 	return [...new Set(ids)];
@@ -212,10 +207,10 @@ export async function probeChatSupport(
 	}
 
 	const payload = await readErrorPayload(response);
-	const error = isRecord(payload) && isRecord(payload.error) ? payload.error : undefined;
-	const code = typeof error?.code === "string" ? error.code : "";
-	const param = typeof error?.param === "string" ? error.param : "";
-	const message = String(error?.message ?? (isRecord(payload) ? payload.detail : "") ?? "");
+	const error = isRecord(payload) && isRecord(payload["error"]) ? payload["error"] : undefined;
+	const code = typeof error?.["code"] === "string" ? error["code"] : "";
+	const param = typeof error?.["param"] === "string" ? error["param"] : "";
+	const message = String(error?.["message"] ?? (isRecord(payload) ? payload["detail"] : "") ?? "");
 	if (code === "operation_not_supported" || code === "not_found_error") return "non-chat";
 	if (response.status === 404) return "non-chat";
 	if (
@@ -241,10 +236,9 @@ export interface IfmDiscovery {
 export function createIfmDiscovery(options: IfmDiscoveryOptions = {}): IfmDiscovery {
 	const fetchImpl = options.fetchImpl ?? fetch;
 	const now = options.now ?? (() => Date.now());
-	const sleep =
-		options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
-	const probeChat = options.probeChat ?? ((baseUrl, apiKey, id, signal) =>
-		probeChatSupport(baseUrl, apiKey, id, signal, fetchImpl));
+	const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+	const probeChat =
+		options.probeChat ?? ((baseUrl, apiKey, id, signal) => probeChatSupport(baseUrl, apiKey, id, signal, fetchImpl));
 
 	const probeCache = new Map<string, { capability: ChatCapability; at: number }>();
 	let lastProbeAt = 0;
@@ -254,7 +248,12 @@ export function createIfmDiscovery(options: IfmDiscoveryOptions = {}): IfmDiscov
 		lastProbeCount: 0,
 	};
 
-	async function cachedProbe(baseUrl: string, apiKey: string, id: string, signal: AbortSignal): Promise<ChatCapability> {
+	async function cachedProbe(
+		baseUrl: string,
+		apiKey: string,
+		id: string,
+		signal: AbortSignal,
+	): Promise<ChatCapability> {
 		const cached = probeCache.get(id);
 		if (cached && now() - cached.at < IFM_PROBE_CACHE_TTL_MS) return cached.capability;
 
@@ -307,13 +306,13 @@ export function createIfmDiscovery(options: IfmDiscoveryOptions = {}): IfmDiscov
 			}
 
 			state.lastSuccessAt = now();
-			state.lastError = undefined;
+			delete state.lastError;
 			state.lastSource = "network";
 			state.lastModelCount = models.length;
 			return models;
 		} catch (error) {
 			if (context.signal.aborted) throw error;
-			state.lastError = error instanceof Error ? error.message : String(error);
+			state.lastError = error instanceof Error ? error["message"] : String(error);
 			state.lastSource = stored.length > 0 ? "cache" : "none";
 			state.lastModelCount = stored.length;
 			// Rethrow so Pi records the refresh error and keeps the restored

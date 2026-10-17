@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
 	createIfmDiscovery,
-	describeModel,
 	deriveDisplayName,
+	describeModel,
 	IFM_THINKING_LEVEL_MAP,
+	type IfmChatModelDescriptor,
 	isObviouslyNonChat,
 	parseModelList,
-	type IfmChatModelDescriptor,
 } from "../src/discovery.ts";
 
 const BASE_URL = "https://api.ifm.ai/v1";
@@ -87,8 +87,8 @@ describe("createIfmDiscovery", () => {
 
 		expect(probed).toEqual(["IFM/K2-Horizon-375B-A23B", "IFM/Jais-3-MoVA-36B-A4B"]);
 		expect(models.map((model) => model.id)).toEqual(["IFM/K2-Horizon-375B-A23B", "IFM/Jais-3-MoVA-36B-A4B"]);
-		expect(models[0]!.provider).toBe("ifm");
-		expect(models[0]!.compat.supportsStore).toBe(false);
+		expect(models[0]?.provider).toBe("ifm");
+		expect(models[0]?.compat.supportsStore).toBe(false);
 		expect(discovery.state().lastSource).toBe("network");
 	});
 
